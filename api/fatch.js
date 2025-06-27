@@ -1,22 +1,50 @@
 import axios from 'axios';
 
+const XATA_API_KEY = process.env.XATA_API_KEY;
+const XATA_URL = process.env.XATA_DATABASE_URL;
+
 export default async function handler(req, res) {
-  const { url } = req.query;
-  if (!url) return res.status(400).json({ error: '❌ URL is required' });
+  const { url, blogId, source } = req.query;
+
+  if (!url || !blogId || !source) {
+    return res.status(400).json({ error: '❌ url, blogId & source are required' });
+  }
 
   try {
-    let finalUrl = url;
+    // ✅ Step 1: Check if blogId & source exist in store table
+    const xataRes = await axios.post(
+      `${XATA_URL}/tables/store/query`,
+      {
+        filter: {
+          blogId: blogId,
+          source: source
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${XATA_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
-    // 1. If it's a short URL like pin.it, expand it
+    const matched = xataRes.data.records && xataRes.data.records.length > 0;
+
+    if (!matched) {
+      return res.status(403).json({ success: false, message: 'unauthorized' });
+    }
+
+    // 🔁 Step 2: Expand pin.it short URL
+    let finalUrl = url;
     if (url.includes('pin.it')) {
-      const response = await axios.get(url, {
+      const redirectRes = await axios.get(url, {
         maxRedirects: 0,
         validateStatus: status => status >= 200 && status < 400,
       });
-      finalUrl = response.headers.location || url;
+      finalUrl = redirectRes.headers.location || url;
     }
 
-    // 2. Fetch actual Pinterest page (whether short or full)
+    // 🔍 Step 3: Scrape Pinterest page for video
     const page = await axios.get(finalUrl, {
       headers: {
         'User-Agent':
@@ -24,7 +52,6 @@ export default async function handler(req, res) {
       },
     });
 
-    // 3. Extract .mp4 video link from page HTML
     const match = page.data.match(/"contentUrl":"(https:[^"]+\.mp4[^"]*)"/);
 
     if (match && match[1]) {
@@ -33,11 +60,12 @@ export default async function handler(req, res) {
         video: match[1],
       });
     } else {
-      return res.status(404).json({ error: '❌ Video URL not found in page' });
+      return res.status(404).json({ error: '❌ Video not found' });
     }
+
   } catch (err) {
     return res.status(500).json({
-      error: '❌ Failed to process URL',
+      error: '❌ Server error',
       details: err.message,
     });
   }
