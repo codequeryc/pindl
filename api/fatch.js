@@ -1,72 +1,40 @@
 import axios from 'axios';
 
-const XATA_API_KEY = process.env.XATA_API_KEY;
-const XATA_URL = process.env.XATA_DATABASE_URL;
+const headers = {
+  Authorization: `Bearer ${process.env.XATA_API_KEY}`,
+  'Content-Type': 'application/json',
+};
 
 export default async function handler(req, res) {
   const { url, blogId, source } = req.query;
-
-  if (!url || !blogId || !source) {
-    return res.status(400).json({ error: '❌ url, blogId & source are required' });
-  }
+  if (!url || !blogId || !source)
+    return res.status(400).json({ error: 'Missing url, blogId, or source' });
 
   try {
-    // ✅ Step 1: Check if blogId & source exist in store table
-    const xataRes = await axios.post(
-      `${XATA_URL}/tables/store/query`,
-      {
-        filter: {
-          blogId: blogId,
-          source: source
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${XATA_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
+    const { data } = await axios.post(
+      `${process.env.XATA_DATABASE_URL}/tables/store/query`,
+      { filter: { blogId, source } },
+      { headers }
     );
 
-    const matched = xataRes.data.records && xataRes.data.records.length > 0;
-
-    if (!matched) {
+    if (!data.records?.length)
       return res.status(403).json({ success: false, message: 'unauthorized' });
-    }
 
-    // 🔁 Step 2: Expand pin.it short URL
-    let finalUrl = url;
-    if (url.includes('pin.it')) {
-      const redirectRes = await axios.get(url, {
-        maxRedirects: 0,
-        validateStatus: status => status >= 200 && status < 400,
-      });
-      finalUrl = redirectRes.headers.location || url;
-    }
+    let finalUrl = url.includes('pin.it')
+      ? (await axios.get(url, { maxRedirects: 0, validateStatus: s => s < 400 })).headers.location
+      : url;
 
-    // 🔍 Step 3: Scrape Pinterest page for video
-    const page = await axios.get(finalUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
+    const html = (await axios.get(finalUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120 Safari/537.36' },
+    })).data;
 
-    const match = page.data.match(/"contentUrl":"(https:[^"]+\.mp4[^"]*)"/);
+    const match = html.match(/"contentUrl":"(https:[^"]+\.mp4[^"]*)"/);
 
-    if (match && match[1]) {
-      return res.status(200).json({
-        success: true,
-        video: match[1],
-      });
-    } else {
-      return res.status(404).json({ error: '❌ Video not found' });
-    }
+    return match
+      ? res.json({ success: true, video: match[1] })
+      : res.status(404).json({ error: 'Video not found' });
 
   } catch (err) {
-    return res.status(500).json({
-      error: '❌ Server error',
-      details: err.message,
-    });
+    return res.status(500).json({ error: 'Server error', details: err.message });
   }
 }
