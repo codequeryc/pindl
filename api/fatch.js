@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   if (!url) return res.status(400).json({ error: '❌ url is required' });
 
   try {
-    // Step 1: Unshorten pin.it URL
+    // Unshorten pin.it link
     const response = await axios.get(url, {
       maxRedirects: 0,
       validateStatus: status => status >= 200 && status < 400
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '❌ Redirect failed' });
     }
 
-    // Step 2: Visit redirected URL and scrape for video URL
+    // Fetch redirected page content
     const page = await axios.get(redirectedUrl);
     const match = page.data.match(/"contentUrl":"(https:[^"]+\.mp4[^"]*)"/);
 
