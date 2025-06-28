@@ -1,7 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
 
-const SECRET_KEY = 'your_demo_secret'; // same secret in browser
+const SECRET_KEY = '6484'; // same secret in browser
 const EXPIRE_TIME = 3600; // in seconds (1 hour)
 
 function generateToken(url, source, ts) {
