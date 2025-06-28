@@ -32,6 +32,13 @@ export default async function handler(req, res) {
       ? (await axios.get(url, { maxRedirects: 0, validateStatus: s => s < 400 })).headers.location
       : url;
 
+    const extMatch = finalUrl.match(/\.(mp4|gif|jpg|jpeg|png|webp)(\?.*)?$/i);
+    if (extMatch) {
+      const ext = extMatch[1].toLowerCase();
+      const type = ext === 'mp4' ? 'video' : ext === 'gif' ? 'gif' : 'image';
+      return res.json({ success: true, type, url: finalUrl });
+    }
+
     const html = (await axios.get(finalUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120 Safari/537.36' },
     })).data;
