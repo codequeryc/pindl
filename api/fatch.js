@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const headers = {
-  Authorization: Bearer ${process.env.XATA_API_KEY},
+  Authorization: `Bearer ${process.env.XATA_API_KEY}`,
   'Content-Type': 'application/json',
 };
 
@@ -13,7 +13,7 @@ export default async function handler(req, res) {
 
   try {
     const { data } = await axios.post(
-      ${process.env.XATA_DATABASE_URL}/tables/store/query,
+      `${process.env.XATA_DATABASE_URL}/tables/store/query`,
       { filter: { blogId, source } },
       { headers }
     );
@@ -26,7 +26,6 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     let finalUrl = url.includes('pin.it')
@@ -37,11 +36,19 @@ export default async function handler(req, res) {
       headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120 Safari/537.36' },
     })).data;
 
-    const match = html.match(/"contentUrl":"(https:[^"]+\.mp4[^"]*)"/);
+    const videoMatch = html.match(/"contentUrl":"(https:[^"]+\.mp4[^"]*)"/);
+    const gifMatch = html.match(/"contentUrl":"(https:[^"]+\.gif[^"]*)"/);
+    const imgMatch = html.match(/"contentUrl":"(https:[^"]+\.(jpg|jpeg|png|webp))[^"]*"/);
 
-    return match
-      ? res.json({ success: true, video: match[1] })
-      : res.status(404).json({ error: 'Video not found' });
+    if (videoMatch) {
+      return res.json({ success: true, type: 'video', url: videoMatch[1] });
+    } else if (gifMatch) {
+      return res.json({ success: true, type: 'gif', url: gifMatch[1] });
+    } else if (imgMatch) {
+      return res.json({ success: true, type: 'image', url: imgMatch[1] });
+    } else {
+      return res.status(404).json({ success: false, error: 'No media found' });
+    }
 
   } catch (err) {
     return res.status(500).json({ error: 'Server error', details: err.message });
