@@ -44,18 +44,22 @@ export default async function handler(req, res) {
     })).data;
 
     const videoMatch = html.match(/"contentUrl":"(https:[^"]+\.mp4[^"]*)"/);
-    const gifMatch = html.match(/"contentUrl":"(https:[^"]+\.gif[^"]*)"/);
-    const imgMatch = html.match(/"contentUrl":"(https:[^"]+\.(jpg|jpeg|png|webp))[^"]*"/);
-
     if (videoMatch) {
       return res.json({ success: true, type: 'video', url: videoMatch[1] });
-    } else if (gifMatch) {
-      return res.json({ success: true, type: 'gif', url: gifMatch[1] });
-    } else if (imgMatch) {
-      return res.json({ success: true, type: 'image', url: imgMatch[1] });
-    } else {
-      return res.status(404).json({ success: false, error: 'No media found' });
     }
+
+    const ogImageMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
+    if (ogImageMatch) {
+      const mediaUrl = ogImageMatch[1];
+      const isGif = mediaUrl.includes('.gif');
+      return res.json({
+        success: true,
+        type: isGif ? 'gif' : 'image',
+        url: mediaUrl,
+      });
+    }
+
+    return res.status(404).json({ success: false, error: 'No media found' });
 
   } catch (err) {
     return res.status(500).json({ error: 'Server error', details: err.message });
